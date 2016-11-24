@@ -44,6 +44,8 @@ public class Util {
 	}
 
 	public static String getResourceExtension(String path) {
+		if(path.equals(""))
+			return "html";
 		String[] splitted = splitByDots(path);
 		String ext = splitted[splitted.length - 1];
 		return ext;
@@ -65,5 +67,14 @@ public class Util {
 		default:
 			return false;
 		}
+	}
+	
+	public static String processExtension(String ext) {
+		if(ext.equals("txt"))
+			return "plain";
+		else if(ext.equals("jpg"))
+			return "jpeg";
+		else
+			return ext;
 	}
 }

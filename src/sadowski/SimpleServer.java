@@ -22,6 +22,8 @@ public class SimpleServer {
 	
 	boolean notFoundFlag = false;
 	
+	ServerSocket server;
+	
 	public SimpleServer() {}
 	
 	public SimpleServer(String host, int port) {
@@ -40,7 +42,10 @@ public class SimpleServer {
 
 		for (int i = 0; i < requestLength; ++i) {
 			line = rd.readLine();
-			if (line == null) {
+			if (line==null) {
+				break;
+			}
+			if (line.equals("")) {
 				break;
 			}
 			toReturn.add(line);
@@ -54,18 +59,23 @@ public class SimpleServer {
 	}
 	
 	public void sendTestResponse(OutputStream os) throws UnsupportedEncodingException, IOException {
-		sendResponse(os, "<!doctype html><html lang=en><head><meta charset=utf-8><title>blah</title></head><body><p>I'm the content</p></body></html>");
+		sendResponse(os, "<!doctype html><html lang=en><head><meta charset=utf-8><title>blah</title></head><body><p>I'm the content</p></body></html>", "html");
 	}
 	
-	public void sendResponse(OutputStream os, String message) throws UnsupportedEncodingException, IOException {
-		String httpResponse = "HTTP/1.1 200 OK\r\n\r\n" + message;
-		os.write(httpResponse.getBytes("UTF-8"));
+	public void sendResponse(OutputStream os, String message, String extension) throws UnsupportedEncodingException, IOException {
+		extension = Util.processExtension(extension);
+		String httpResponse = "HTTP/1.1 200 OK\r\n";
+		httpResponse += "Accept-Ranges: bytes\r\n";
+		httpResponse += "Content-Type: text/" + extension + "\r\n";
+		//httpResponse += "Keep-Alive: timeout=1500, max=1\r\n";
+		httpResponse += "Connection: Close\r\n\r\n";
+		String overallMessage = httpResponse + message;
+		os.write(overallMessage.getBytes("UTF-8"));
 	}
 	
-	public void sendResponse(OutputStream os, ArrayList<String> lines) throws UnsupportedEncodingException, IOException {
+	public void sendResponse(OutputStream os, ArrayList<String> lines, String extension) throws UnsupportedEncodingException, IOException {
 		String message = Util.mergeArrayListOfStrings(lines);
-		String httpResponse = "HTTP/1.1 200 OK\r\n\r\n" + message;
-		os.write(httpResponse.getBytes("UTF-8"));
+		sendResponse(os, message, extension);
 	}
 	
 	public void sendResponse404(OutputStream os) throws UnsupportedEncodingException, IOException {
@@ -75,10 +85,14 @@ public class SimpleServer {
 	}
 	
 	public ArrayList<String> getClientRequest(Socket clientSocket) throws IOException {
-		return getClientRequest(clientSocket, 8);
+		return getClientRequest(clientSocket, 200);
 	}
 	
 	public String getClientRequestResource(ArrayList<String> clientRequest) {
+		if(clientRequest.isEmpty()) {
+			return "";
+		}
+		
 		String firstLine = clientRequest.get(0);
 		String[] divided = firstLine.split("\\s+");
 		
@@ -104,12 +118,17 @@ public class SimpleServer {
 	}
 	
 	void sendImgResponse(String path, Socket socket, String type) throws IOException {
+		String httpResponse = "HTTP/1.1 200 OK\r\n";
+		httpResponse += "Accept-Ranges: bytes\r\n";
+		httpResponse += "Content-Type: image/" + type + "\r\n";
+		//httpResponse += "Keep-Alive: timeout=1500, max=1\r\n";
+		httpResponse += "Connection: Close\r\n\r\n";
+		socket.getOutputStream().write(httpResponse.getBytes("UTF-8"));
 		BufferedImage image = getImgResource(path);
 		ImageIO.write(image, type, socket.getOutputStream());
 	}
 	
 	public void run() throws IOException {
-		ServerSocket server = new ServerSocket(port);
 		System.out.println("Listening for connection on port " + port + " ....");
 
 		try (Socket clientSocket = server.accept()) {
@@ -123,13 +142,12 @@ public class SimpleServer {
 				if( Util.checkIfExtensionRefersToImg(extension) ) {
 					sendImgResponse(path, clientSocket, extension);
 				} else {
-					sendResponse(clientSocket.getOutputStream(), resource);
+					sendResponse(clientSocket.getOutputStream(), resource, extension);
 				}
 			} else {
 				sendResponse404(clientSocket.getOutputStream());
 			}
 		}
-		server.close();
 	}
 	
 	public void setNotFoundFlag(boolean toSet) {
@@ -142,9 +160,10 @@ public class SimpleServer {
 
 	public static void main(String args[]) throws IOException {
 		int port = Util.getUserInteger("Type in on which port server should listen: ");
-		String host = "localhost";
+		String host = "127.0.0.1";
 		
 		SimpleServer serv = new SimpleServer(host, port);
+		serv.server = new ServerSocket(port);
 		while(true) {
 			serv.run();
 		}
